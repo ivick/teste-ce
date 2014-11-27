@@ -1,0 +1,12 @@
+name = Ctools field
+description = Stores ctools content in a field.
+core = 7.x
+dependencies[] = ds
+dependencies[] = ctools
+
+; Information added by Drupal.org packaging script on 2014-10-15
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "ctools_field"
+datestamp = "1413364865"
+

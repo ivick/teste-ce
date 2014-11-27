@@ -1,0 +1,236 @@
+<?php
+
+/**
+ * @file
+ * Main file of Ctools Field module.
+ */
+
+/**
+ * Implements hook_field_info().
+ */
+function ctools_field_field_info() {
+  return array(
+    'ctools_field' => array(
+      'label' => t('Ctools field'),
+      'description' => t('Stores ctools content.'),
+      'settings' => array(),
+      'default_widget' => 'ds_selector',
+      'default_formatter' => 'ctools_field_formatter',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_settings_form().
+ */
+function ctools_field_field_settings_form($field, $instance, $has_data) {
+  $settings = $field['settings'];
+  $form = array();
+
+//  Example for later implementation
+//  $form['decimal_separator'] = array(
+//    '#type' => 'select',
+//    '#title' => t('Decimal marker'),
+//    '#options' => array('.' => t('Decimal point'), ',' => t('Comma')),
+//    '#default_value' => $settings['decimal_separator'],
+//    '#description' => t('The character users will input to mark the decimal point in forms.'),
+//  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_field_instance_settings_form().
+ */
+function ctools_field_field_instance_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+  $form = array();
+
+//  Example for later implementation
+//  $form['prefix'] = array(
+//    '#type' => 'textfield',
+//    '#title' => t('Prefix'),
+//    '#default_value' => $settings['prefix'],
+//    '#size' => 60,
+//    '#description' => t("Define a string that should be prefixed to the value, like '$ ' or '&euro; '. Leave blank for none. Separate singular and plural values with a pipe ('pound|pounds')."),
+//  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_field_validate().
+ *
+ */
+function ctools_field_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+//  foreach ($items as $delta => $item) {
+//    if ($item['value'] != '') {
+//    }
+//  }
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function ctools_field_field_is_empty($item, $field) {
+  // @todo: why is this ignored???
+  if (empty($item['value']) && (string) $item['value'] !== '0') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function ctools_field_field_formatter_info() {
+  return array(
+    'ctools_field_formatter' => array(
+      'label' => t('Default Formatter'),
+      'field types' => array('ctools_field'),
+      'settings' =>  array(
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function ctools_field_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+  $element = array();
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function ctools_field_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  $summary = array();
+
+  return implode('<br />', $summary);
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function ctools_field_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  foreach ($items as $delta => $item) {
+    $field = array(
+      'entity_type' => $entity_type,
+      'entity' => $entity,
+      'formatter_settings' => array(
+        'show_title' => FALSE,
+        'title_wrapper' => '',
+        'ctools' => $item['value'],
+      ),
+    );
+
+    $rendered_content = ds_render_ctools_field($field);
+
+    $element[$delta] = array('#markup' => $rendered_content);
+  }
+
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function ctools_field_field_widget_info() {
+  return array(
+    'ds_selector' => array(
+      'label' => t('DS ctools selector'),
+      'field types' => array('ctools_field'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function ctools_field_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $value = isset($items[$delta]['value']) ? $items[$delta]['value'] : false;
+
+  /* Get ds form css & js */
+  form_load_include($form_state, 'inc', 'ds', 'includes/ds.field_ui');
+  $cloned_form = $element;
+  $cloned_form['#view_mode'] = 'fake';
+  $cloned_form['#submit'] = array();
+
+  $fake_form_state = $form_state;
+  ds_field_ui_fields_layouts($cloned_form, $fake_form_state);
+
+  if (!array_key_exists('#attached', $form)) {
+    $element['#attached'] = array();
+  }
+  $element['#attached'] = array_merge($element['#attached'], $cloned_form['#attached']);
+
+  // Fake ds ctools/dynamic content field.
+  $field = array(
+    'entity_type' => 'layout_element',
+    'name' => 'ctools_field', //@todo this should be unique for each instance
+    'properties' => array(
+      'settings' => array(
+        'ctools' => array(
+          'type' => 'ctools',
+        ),
+      ),
+    ),
+  );
+
+  if (!empty($value)) {
+    $field['formatter_settings'] = array(
+      'ctools' => $value
+    );
+  }
+
+  // Load field.
+  $ds_field = ds_ds_field_settings_form($field);
+
+  $element['select'] = $ds_field['select'];
+
+  // We need to change the parents so the ajax invoke can set the value
+  $hidden_field = $ds_field['ctools'];
+  $hidden_field['#parents'] = array(
+    'fields',
+    $field['name'],
+    'settings_edit_form',
+    'settings',
+    'ctools'
+  );
+  $element['hidden'] = $hidden_field;
+
+  // Add a custom validation to set the correct field value.
+  $element['#element_validate'][] = 'ctools_field_widget_validate';
+
+  return array('value' => $element);
+}
+
+/**
+ * Widget validation to set the correct field value.
+ */
+function ctools_field_widget_validate($element, &$form_state) {
+  $field = field_widget_field($element, $form_state);
+  $instance = field_widget_instance($element, $form_state);
+
+  // Move the value from the hidden field to the field value.
+  $hidden_value = $element['hidden']['#value'];
+  form_set_value($element, $hidden_value, $form_state);
+}
+
+/**
+ * Implements hook_field_widget_error().
+ */
+function ctools_field_field_widget_error($element, $error, $form, &$form_state) {
+  form_error($element['value'], $error['message']);
+}
